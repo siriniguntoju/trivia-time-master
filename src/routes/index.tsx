@@ -44,8 +44,9 @@ function Home() {
 
   useEffect(() => {
     if (!user || !threads) return;
-    if (threads.length > 0) {
-      navigate({ to: "/chat/$threadId", params: { threadId: threads[0].id } });
+    const first = threads[0];
+    if (first) {
+      navigate({ to: "/chat/$threadId", params: { threadId: first.id } });
       return;
     }
     createThread(user.id)
