@@ -16,6 +16,16 @@ const FORMATS = [
   { id: "mcq" as const, label: "Multiple choice", hint: "Pick A, B, C or D" },
 ];
 
+function startPrompt(topic: string, format: "direct" | "mcq") {
+  const style =
+    format === "mcq"
+      ? "with multiple-choice questions (A, B, C, D options)"
+      : "with direct questions I answer in my own words";
+  return topic === "Surprise me!"
+    ? `Surprise me with a topic, ${style}.`
+    : `Quiz me on ${topic}, ${style}.`;
+}
+
 function messageText(message: UIMessage) {
   return message.parts
     .map((part) => (part.type === "text" ? part.text : ""))
@@ -33,6 +43,7 @@ export function ChatWindow({
   onTitle: (title: string) => void;
 }) {
   const [input, setInput] = useState("");
+  const [format, setFormat] = useState<"direct" | "mcq">("direct");
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const titled = useRef(initialMessages.length > 0);
