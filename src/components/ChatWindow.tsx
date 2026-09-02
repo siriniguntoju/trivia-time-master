@@ -165,6 +165,13 @@ export function ChatWindow({
                 <ReactMarkdown
                   components={{
                     p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                    ul: ({ children }) => (
+                      <ul className="mb-2 space-y-1 last:mb-0">{children}</ul>
+                    ),
+                    ol: ({ children }) => (
+                      <ol className="mb-2 space-y-1 last:mb-0">{children}</ol>
+                    ),
+                    li: ({ children }) => <li>{children}</li>,
                     strong: ({ children }) => (
                       <strong className={cn(!isUser && "text-primary")}>{children}</strong>
                     ),
