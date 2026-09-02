@@ -11,6 +11,11 @@ import { cn } from "@/lib/utils";
 
 const STARTERS = ["80s movies", "World capitals", "Python programming", "Surprise me!"];
 
+const FORMATS = [
+  { id: "direct" as const, label: "Direct answers", hint: "Answer in your own words" },
+  { id: "mcq" as const, label: "Multiple choice", hint: "Pick A, B, C or D" },
+];
+
 function messageText(message: UIMessage) {
   return message.parts
     .map((part) => (part.type === "text" ? part.text : ""))
