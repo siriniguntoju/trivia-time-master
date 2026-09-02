@@ -92,13 +92,42 @@ export function ChatWindow({
             </div>
             <h2 className="mt-5 text-4xl text-stage-title">Welcome to Quizzo!</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Name your topic and the questions start flying.
+              Pick a question style and a topic — the questions start flying.
             </p>
-            <div className="mt-6 flex flex-wrap justify-center gap-2">
+
+            <div className="mt-6 grid grid-cols-2 gap-2">
+              {FORMATS.map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setFormat(f.id)}
+                  className={cn(
+                    "rounded-xl border px-4 py-3 text-left transition-colors",
+                    format === f.id
+                      ? "border-primary bg-secondary"
+                      : "border-border bg-card hover:border-primary/60",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "block text-sm font-semibold",
+                      format === f.id ? "text-primary" : "text-card-foreground",
+                    )}
+                  >
+                    {f.label}
+                  </span>
+                  <span className="block text-xs text-muted-foreground">{f.hint}</span>
+                </button>
+              ))}
+            </div>
+
+            <p className="mt-6 text-xs uppercase tracking-widest text-muted-foreground">
+              Choose a topic
+            </p>
+            <div className="mt-3 flex flex-wrap justify-center gap-2">
               {STARTERS.map((s) => (
                 <button
                   key={s}
-                  onClick={() => submit(s)}
+                  onClick={() => submit(startPrompt(s, format))}
                   className="rounded-full border border-border bg-card px-4 py-2 text-sm text-card-foreground transition-colors hover:border-primary hover:text-primary"
                 >
                   {s}
