@@ -1,7 +1,7 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Send, Sparkles } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Send, Shuffle, Sparkles, Timer } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 
@@ -16,14 +16,29 @@ const FORMATS = [
   { id: "mcq" as const, label: "Multiple choice", hint: "Pick A, B, C or D" },
 ];
 
-function startPrompt(topic: string, format: "direct" | "mcq") {
+const DIFFICULTIES = [
+  { id: "easy" as const, label: "Easy", hint: "Warm-up round" },
+  { id: "medium" as const, label: "Medium", hint: "Solid challenge" },
+  { id: "hard" as const, label: "Hard", hint: "Brutal brain-benders" },
+  { id: "mixed" as const, label: "Mixed", hint: "Easy → hard climb" },
+];
+
+type Format = "direct" | "mcq";
+type Difficulty = "easy" | "medium" | "hard" | "mixed";
+
+const TIMEOUT_TEXT = "[TIME'S UP - no answer given]";
+const QUESTION_SECONDS = 30;
+
+function startPrompt(topic: string, format: Format, difficulty: Difficulty) {
   const style =
     format === "mcq"
       ? "with multiple-choice questions (A, B, C, D options)"
       : "with direct questions I answer in my own words";
+  const level =
+    difficulty === "mixed" ? "a mixed difficulty climb" : `${difficulty} difficulty`;
   return topic === "Surprise me!"
-    ? `Surprise me with a topic, ${style}.`
-    : `Quiz me on ${topic}, ${style}.`;
+    ? `Surprise me with a topic, ${style}, at ${level}.`
+    : `Quiz me on ${topic}, ${style}, at ${level}.`;
 }
 
 function messageText(message: UIMessage) {
@@ -43,7 +58,9 @@ export function ChatWindow({
   onTitle: (title: string) => void;
 }) {
   const [input, setInput] = useState("");
-  const [format, setFormat] = useState<"direct" | "mcq">("direct");
+  const [format, setFormat] = useState<Format>("direct");
+  const [difficulty, setDifficulty] = useState<Difficulty>("mixed");
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const titled = useRef(initialMessages.length > 0);
@@ -80,18 +97,52 @@ export function ChatWindow({
     if (!busy) inputRef.current?.focus();
   }, [busy, threadId]);
 
-  async function submit(text: string) {
-    const trimmed = text.trim();
-    if (!trimmed || busy) return;
-    setInput("");
-    if (!titled.current) {
-      titled.current = true;
-      const title = trimmed.length > 42 ? `${trimmed.slice(0, 42)}…` : trimmed;
-      onTitle(title);
-      renameThread(threadId, title).catch(() => undefined);
+  const submit = useCallback(
+    async (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed || busy) return;
+      setInput("");
+      setSecondsLeft(null);
+      if (!titled.current) {
+        titled.current = true;
+        const title = trimmed.length > 42 ? `${trimmed.slice(0, 42)}…` : trimmed;
+        onTitle(title);
+        renameThread(threadId, title).catch(() => undefined);
+      }
+      await sendMessage({ text: trimmed });
+    },
+    [busy, onTitle, sendMessage, threadId],
+  );
+
+  // Countdown: runs while the host's latest message is an unanswered question.
+  const last = messages[messages.length - 1];
+  const awaitingAnswer =
+    !busy && !!last && last.role === "assistant" && messageText(last).includes("?");
+
+  useEffect(() => {
+    if (!awaitingAnswer) {
+      setSecondsLeft(null);
+      return;
     }
-    await sendMessage({ text: trimmed });
+    setSecondsLeft(QUESTION_SECONDS);
+    const started = Date.now();
+    const id = setInterval(() => {
+      const left = QUESTION_SECONDS - Math.floor((Date.now() - started) / 1000);
+      setSecondsLeft(left > 0 ? left : 0);
+      if (left <= 0) {
+        clearInterval(id);
+        void submit(TIMEOUT_TEXT);
+      }
+    }, 250);
+    return () => clearInterval(id);
+  }, [awaitingAnswer, last?.id, submit]);
+
+  function switchTopic() {
+    const topic = window.prompt("New topic — what should Quizzo grill you on next?");
+    if (topic?.trim()) void submit(`Switch to a brand new topic right now: ${topic.trim()}`);
   }
+
+  const urgent = secondsLeft !== null && secondsLeft <= 10;
 
   return (
     <div className="flex h-full flex-col">
@@ -103,7 +154,7 @@ export function ChatWindow({
             </div>
             <h2 className="mt-5 text-4xl text-stage-title">Welcome to Quizzo!</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Pick a question style and a topic — the questions start flying.
+              Pick a style, a difficulty and a topic — 10 questions, 30 seconds each!
             </p>
 
             <div className="mt-6 grid grid-cols-2 gap-2">
@@ -132,13 +183,41 @@ export function ChatWindow({
             </div>
 
             <p className="mt-6 text-xs uppercase tracking-widest text-muted-foreground">
+              Difficulty mix
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {DIFFICULTIES.map((d) => (
+                <button
+                  key={d.id}
+                  onClick={() => setDifficulty(d.id)}
+                  className={cn(
+                    "rounded-xl border px-3 py-2 text-center transition-colors",
+                    difficulty === d.id
+                      ? "border-primary bg-secondary"
+                      : "border-border bg-card hover:border-primary/60",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "block text-sm font-semibold",
+                      difficulty === d.id ? "text-primary" : "text-card-foreground",
+                    )}
+                  >
+                    {d.label}
+                  </span>
+                  <span className="block text-[11px] text-muted-foreground">{d.hint}</span>
+                </button>
+              ))}
+            </div>
+
+            <p className="mt-6 text-xs uppercase tracking-widest text-muted-foreground">
               Choose a topic
             </p>
             <div className="mt-3 flex flex-wrap justify-center gap-2">
               {STARTERS.map((s) => (
                 <button
                   key={s}
-                  onClick={() => submit(startPrompt(s, format))}
+                  onClick={() => submit(startPrompt(s, format, difficulty))}
                   className="rounded-full border border-border bg-card px-4 py-2 text-sm text-card-foreground transition-colors hover:border-primary hover:text-primary"
                 >
                   {s}
@@ -149,9 +228,10 @@ export function ChatWindow({
         )}
 
         {messages.map((message) => {
-          const text = messageText(message);
-          if (!text) return null;
+          const raw = messageText(message);
+          if (!raw) return null;
           const isUser = message.role === "user";
+          const text = raw === TIMEOUT_TEXT ? "⏰ Time's up — no answer!" : raw;
           return (
             <div key={message.id} className={cn("flex", isUser ? "justify-end" : "justify-start")}>
               <div
@@ -207,30 +287,59 @@ export function ChatWindow({
         }}
         className="border-t border-border bg-card/60 px-4 py-4 backdrop-blur sm:px-8"
       >
-        <div className="mx-auto flex max-w-3xl items-end gap-2">
-          <textarea
-            ref={inputRef}
-            value={input}
-            rows={1}
-            autoFocus
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void submit(input);
-              }
-            }}
-            placeholder="Type your answer…"
-            className="max-h-40 min-h-11 flex-1 resize-none rounded-xl border border-input bg-background px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
-          />
-          <button
-            type="submit"
-            disabled={busy || !input.trim()}
-            className="flex size-11 items-center justify-center rounded-xl bg-gold text-primary-foreground transition-opacity disabled:opacity-40"
-            aria-label="Send answer"
-          >
-            <Send className="size-5" />
-          </button>
+        <div className="mx-auto max-w-3xl">
+          {messages.length > 0 && (
+            <div className="mb-2 flex items-center justify-between gap-3">
+              {secondsLeft !== null ? (
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold",
+                    urgent
+                      ? "border-accent bg-accent/15 text-accent"
+                      : "border-border bg-card text-muted-foreground",
+                  )}
+                >
+                  <Timer className="size-3.5" />
+                  {secondsLeft}s to answer!
+                </span>
+              ) : (
+                <span />
+              )}
+              <button
+                type="button"
+                onClick={switchTopic}
+                disabled={busy}
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold text-card-foreground transition-colors hover:border-primary hover:text-primary disabled:opacity-40"
+              >
+                <Shuffle className="size-3.5" /> New topic
+              </button>
+            </div>
+          )}
+          <div className="flex items-end gap-2">
+            <textarea
+              ref={inputRef}
+              value={input}
+              rows={1}
+              autoFocus
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void submit(input);
+                }
+              }}
+              placeholder="Type your answer…"
+              className="max-h-40 min-h-11 flex-1 resize-none rounded-xl border border-input bg-background px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
+            />
+            <button
+              type="submit"
+              disabled={busy || !input.trim()}
+              className="flex size-11 items-center justify-center rounded-xl bg-gold text-primary-foreground transition-opacity disabled:opacity-40"
+              aria-label="Send answer"
+            >
+              <Send className="size-5" />
+            </button>
+          </div>
         </div>
       </form>
     </div>
