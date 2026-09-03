@@ -6,3 +6,7 @@
 - [x] Trivia host persona (one question at a time, score, fun facts, 5-question recaps)
 - [x] Question format choice: direct answer vs multiple choice (A/B/C/D)
 - [x] Verify end-to-end in browser (sign in, play a round, both question formats)
+- [x] 30s countdown per question, auto-marked wrong on timeout
+- [x] Difficulty mix picker (easy/medium/hard/mixed)
+- [x] End-of-game review listing every question, answer and correct answer
+- [x] Switch topic mid-game from the composer
